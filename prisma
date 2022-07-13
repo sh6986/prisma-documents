@@ -1,0 +1,215 @@
+# 프리즈마란?
+
+# 프리즈마란?
+
+오픈소스 차세대 ORM이다. 다음 부분으로 구성된다.
+
+- **Prisma Client** : Node.js 및 TypeScript 를 위한 자동 생성 및 유형 안전 쿼리 빌더
+- **Prisma Migrate** : 마이그레이션 시스템
+- **Prisma Studio** : 데이터베이스의 데이터를 보고 편집하는 GUI
+
+Prisma Client는 모든 Node.js 또는 TypeScript 백엔드 애플리케이션에서 사용할 수 있다. REST API, GraphQL API, gRPC API 또는 데이터베이스가 필요한 모든 것이 될 수 있다.
+
+# 프리즈마는 어떻게 작동할까?
+
+## 프리즈마 스키마
+
+Prisma 툴킷의 도구를 사용하는 모든 프로젝트는 **Prisma 스키마 파일**로 시작한다. Prisma 스키마를 통해 개발자는 직관적인 데이터 모델링 언어로 애플리케이션 모델을 정의할 수 있다. 또한 데이터베이스에 대한 연결을 포함하고 생성기를 정의한다.
+
+```jsx
+// 관계형 데이터 베이스
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Post {
+  id        Int     @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean @default(false)
+  author    User?   @relation(fields: [authorId], references: [id])
+  authorId  Int?
+}
+
+model User {
+  id    Int     @id @default(autoincrement())
+  email String  @unique
+  name  String?
+  posts Post[]
+}
+```
+
+```jsx
+// MongoDB
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Post {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  content   String?
+  published Boolean @default(false)
+  author    User?   @relation(fields: [authorId], references: [id])
+  authorId  String  @db.ObjectId
+}
+
+model User {
+  id    String  @id @default(auto()) @map("_id") @db.ObjectId
+  email String  @unique
+  name  String?
+  posts Post[]
+}
+```
+
+<aside>
+💡 **참고**
+Prisma 스키마에는 강력한 데이터 모델링 기능이 있다. 예를 들어 Prisma Client API 에서 관계 작업을 더 쉽게 할 수 있도록 “Prisma-level” 관계 필드를 정의할 수 있다. User 모델의 posts 필드의 경우 “Prisma-level”에서만 정의된다. 즉, 기본 데이터베이스에서 외래 키로 명시되지 않는다.
+
+</aside>
+
+이 스키마에서는 세 가지를 구성한다.
+
+- **Data source** : 데이터베이스 연결을 지정한다. (환경 변수를 통해)
+- **Generator** : Prisma Client를 생성하고자 함을 나타낸다.
+- **Data model** : 애플리케이션 모델을 정의한다.
+
+## Prisma Data model
+
+### Prisma model의 기능
+
+Data model은 model의 모음이다. model에는 두 가지 주요 기능이 있다.
+
+- 관계형 데이터베이스의 테이블 또는 MongoDB의 컬렉션을 나타낸다.
+- Prisma Client API에서 쿼리 기반 제공
+
+### Data model 가져오기
+
+Data model을 Prisma 스키마로 가져오기 위한 두 가지 주요 워크플로가 있다.
+
+- 데이터 모델을 수동으로 작성하고 Prisma Migrate를 사용하여 데이터베이스에 매핑
+- 데이터베이스를 검사하여 데이터 모델 생성
+
+Data model이 정의되면 정의된 모델에 대한 CRUD 및 더 많은 쿼리를 노출하는 Prisma Client를 생성할 수 있다.
+
+TypeScript를 사용하는 경우 모든 쿼리에 대해 완전한 유형 안전성을 얻을 수 있다. (모델 필드의 하위 집합만 검색하는 경우에도)
+
+## Prisma Client로 데이터베이스에 접근하기
+
+### Prisma Client 생성
+
+```jsx
+npm install @prisma/client
+```
+
+`@prisma/client` 패키지를 설치하면 Prisma 스키마를 읽고 Prisma Client 코드를 생성하는 명령어 `prisma generate` 이 호출된다. 코드는 기본적으로 `node_modules/.prisma/client` 폴더에 생성된다.
+
+Data model을 변경한 후 `node_modules/.prisma/client` 내부 코드가 업데이트 되도록 Prisma Client를 수동으로 다시 생성해야 한다.
+
+```jsx
+prisma generate
+```
+
+### Prisma Client를 사용하여 데이터베이스에 쿼리 보내기
+
+Prisma Client가 생성되면 코드를 가져와서 데이터베이스에 쿼리를 보낼 수 있다. 이것이 설정 코드의 모습이다.
+
+***Prisma Client 가져오기 및 인스턴스화***
+
+```jsx
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+```
+
+이제 생성된 Prisma Client API를 통해 쿼리 전송을 시작할 수 있다.
+
+***데이터베이스에서 모든 User 레코드 검색***
+
+```jsx
+const allUsers = await prisma.user.findMany();
+```
+
+***User객체의 posts 관계를 include***
+
+```jsx
+const allUsers = await prisma.user.findMany({
+	include: { posts: true },
+});
+```
+
+***“prisma” 를 포함하는 모든 Post 레코드 필터링*** 
+
+```jsx
+const filteredPosts = await prisma.post.findMany({
+	where: {
+		OR: [
+			{ title: { contains: 'prisma' } },
+			{ content: { contains: 'prisma' } },
+		],
+	},
+});
+```
+
+***동일한 쿼리에서 User와 Post 새 레코드 만들기***
+
+```jsx
+const user = await prisma.user.create({
+	data: {
+		name: 'Alice',
+		email: 'alice@prisma.io',
+		posts: {
+			create: { title: 'Join us for Prisma Day 2020' },
+		},
+	},
+});
+```
+
+***기존 Post 레코드 업데이트***
+
+```jsx
+const post = await prisma.post.update({
+	where: { id: 42 },
+	data: { published: true },
+});
+```
+
+### TypeScript와 함께 사용
+
+TypeScript를 사용할 때 이 쿼리의 결과는 정적으로 유형이 지정되므로 존재하지 않는 속성에 실수로 액세스 할 수 없습니다. (그리고 모든 오타는 컴파일 타임에 포착됨) 
+
+# 일반적인 Prisma 작업 흐름
+
+위에서 언급했듯이 데이터 모델을 Prisma 스키마로 가져오는 두 가지 방법이 있다. 선택하는 접근 방식에 따라 기본 Prisma 워크플로가 다르게 보일 수 있다.
+
+## Prisma Migrate
+
+Prisma의 통합 데이터베이스 마이그레이션 도구인 Prisma Migrate를 사용하는 위크플로는 다음과 같다.
+
+1. Prisma Data model을 수동으로 조정
+2. `prisma migrate dev` CLI 명령을 사용해 개발 데이터베이스 마이그레이션
+3. 애플리케이션 코드에서 Prisma Client를 사용하여 데이터베이스에 액세스
+
+![Untitled](./upload/1.png)
+
+## SQL migrations 및 introspection(내부검사)
+
+어떤 이유로 Prisma Migrate를 사용할 수 없거나 사용하지 않으려는 경우에도 자체 검사를 사용하여 데이터베이스 스키마에서 Prisma 스키마를 업데이트 할 수 있다. SQL 마이그레이션 및 내부검사를 사용할 때의 일반적인 워크플로는 약간 다르다.
+
+1. SQL 또는 migration 도구를 사용하여 수동으로 데이터베이스 스키마 조정
+2. (재) 데이터베이스 검사
+3. 선택적으로 Prisma Client API를 (재)구성한다.
+4. (재) Prisma Client 생성
+5. 애플리케이션 코드에서 Prisma Client를 사용하여 데이터베이스에 액세스
+
+![Untitled](./upload/2.png)
